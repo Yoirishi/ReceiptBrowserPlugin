@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.29.1-dev132.0",
+    "@plasmohq/messaging": "^0.7.2",
     "apache-arrow": "^21.0.0",
     "dexie": "^4.2.0",
     "plasmo": "0.90.5",
@@ -27,11 +28,22 @@
     "typescript": "5.3.3"
   },
   "manifest": {
+    "permissions": [
+      "scripting",
+      "activeTab",
+      "tabs"
+    ],
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "http://*/*"
     ],
     "content_security_policy": {
       "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' ws://localhost:* http://localhost:* ws://127.0.0.1:* http://127.0.0.1:*; worker-src 'self'"
+    },
+    "externally_connectable": {
+      "matches": [
+        "https://*/*",
+        "http://*/*"]
     },
     "web_accessible_resources": [
       {
@@ -44,5 +56,12 @@
         ]
       }
     ]
-  }
+  },
+  "contributors": [
+    {
+      "name": "yoirishi",
+      "email": "yoirishi.zdv@gmail.com",
+      "url": "https://github.com/Yoirishi"
+    }
+  ]
 }

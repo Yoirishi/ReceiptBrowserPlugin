@@ -1,12 +1,19 @@
-import React from "react"
-import { selectionsRepo, type Selection } from "~src/lib/selectionsRepo"
-import ComboBox from "~src/components/ComboBox"
+import { log } from "node:util";
+import React from "react";
+
+
+
+import ComboBox from "~src/components/ComboBox";
+import { selectionsRepo, type Selection } from "~src/lib/selectionsRepo";
+
+
+
 
 
 // domains where parsing is enabled (tune later)
 const SUPPORTED_HOSTS = [
-  "example.com",
-  "system.local"
+  "platformaofd.ru",
+  "costviser.ru"
 ]
 
 export default function Popup() {
@@ -54,13 +61,31 @@ export default function Popup() {
   const openViewer = () => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/viewer.html" + (active ? `?sid=${active.id}` : "")) })
   const openCompare = () => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/compare.html") }) // placeholder for future
 
+  const findPlatformaTab = async () => {
+    const tabs = await chrome.tabs.query({})
+    return tabs.find(t => typeof t.url === "string" && /^https:\/\/lk\.platformaofd\.ru\/web\/auth\/cheques\/search/.test(t.url))
+  }
+
   const startParse = async () => {
-    if (!hostInfo.tabId || !active) return
     setBusy(true)
+
     try {
-      // content-script side should listen for this message
-      await chrome.tabs.sendMessage(hostInfo.tabId, { type: "START_PARSE", selectionId: active.id })
-      // You can await a response via chrome.runtime.onMessage in CS and wrap in Promise if needed
+      const tab = await findPlatformaTab()
+      if (!tab?.id) {
+        console.log("No active Platforma tab")
+        throw new Error("Нет активной вкладки")
+      }
+      console.log("start parse on tab", tab.id, "with selection", active?.id, "active?", active ? "yes" : "no")
+      // const res = await chrome.tabs.sendMessage(tab.id, {
+      //   type: "START_PARSE",
+      //   selectionId: active?.id
+      // })
+      const res = await chrome.runtime.sendMessage({
+        type: "START_PARSE",
+      })
+      if (!res?.ok) throw new Error("Контент-скрипт не ответил")
+    } catch (e) {
+      console.error("startParse error", e)
     } finally {
       setBusy(false)
     }
@@ -121,7 +146,7 @@ export default function Popup() {
           </button>
         ) : (
           <div style={{ fontSize: 12, color: "#6B7280" }}>
-            Парсер выключен для этого домена. Настрой список доменов позже.
+            Парсер выключен для этого домена. Доступные домены: {SUPPORTED_HOSTS.join(", ")}
           </div>
         )}
       </div>
