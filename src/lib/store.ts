@@ -1,9 +1,5 @@
 import Dexie, { type Table } from "dexie"
 
-
-
-
-
 export interface AItem { key: string; title?: string | null; price?: number | null }
 
 class AppDB extends Dexie {

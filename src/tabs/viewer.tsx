@@ -45,7 +45,7 @@ export default function Viewer() {
       const conn = await getConn()
       const res = await conn.query(`SELECT key, title, price FROM a_items ORDER BY key`)
       // @ts-ignore duckdb Result
-      setRows(await res.toArray())
+      setRows(res.toArray())
     } finally { setBusy(false) }
   }
 

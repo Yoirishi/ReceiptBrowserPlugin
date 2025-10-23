@@ -1,5 +1,12 @@
-import type { PlasmoCSConfig } from "plasmo"
-import type { CSSProperties } from "react"
+import type { PlasmoCSConfig } from "plasmo";
+import { useEffect, useState, type CSSProperties } from "react"
+import type { NetEvent } from "../utils/XhrRequestInterceptor"
+
+
+import { parseAndStoreCheques } from "~src/lib/cheque-parser.platformaofd";
+
+
+
 
 
 export const config: PlasmoCSConfig = {
@@ -7,12 +14,29 @@ export const config: PlasmoCSConfig = {
   run_at: "document_idle",
 };
 
-window.addEventListener("ext:net", event => {
-  // @ts-ignore
-  console.log(event.detail)
-}, false);
+
 
 const QueryXhrForCheques = () => {
+
+  const [parsed, setParsed] = useState(0)
+
+  const chequesHandler = async (event: NetEvent) => {
+    // @ts-ignore
+    const parsedCheques = await parseAndStoreCheques(event.detail.body)
+    setParsed(parsedCheques)
+  }
+
+  useEffect(() => {
+    window.addEventListener("ext:net", event => {
+      // @ts-ignore
+      chequesHandler(event)
+    }, false);
+
+    return window.removeEventListener("ext:net", event => {
+      // @ts-ignore
+      chequesHandler(event)
+    }, false);
+  }, [])
 
   return (<div
     style={{
@@ -22,7 +46,7 @@ const QueryXhrForCheques = () => {
       top: 10,
       right: 10
     }}>
-    <button style={btn} onClick={() => {}}>Query!</button>
+    <button style={btn} onClick={() => {}}>parsed: {parsed}</button>
   </div>)
 }
 
