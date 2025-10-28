@@ -5,6 +5,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 
 import type { NetEvent } from "../utils/XhrRequestInterceptor";
 import { parseCheques } from "~src/lib/cheque-parser.platformaofd"
+import { usePlatformaOfdListener } from "~src/utils/usePlatformaOfdListener"
 
 
 export const config: PlasmoCSConfig = {
@@ -15,42 +16,38 @@ export const config: PlasmoCSConfig = {
 
 const QueryXhrForCheques = () => {
 
-  const [parsed, setParsed] = useState(0)
+  const [readyToParse, setReadyToParse] = useState(false)
 
-  const chequesHandler = async (event: { detail: NetEvent }) => {
-    const rows = parseCheques(event.detail.body ?? "")
-    setParsed(rows.length)
-    await chrome.runtime.sendMessage({
-      type: "save-cheques",
-      rows,
-      meta: { source: "PlatformaOFD" }
-    })
+  const {parsed} = usePlatformaOfdListener(readyToParse)
+
+  const onStopParse = () => {
+    setReadyToParse(false)
   }
 
+  return (
+    <div
+      style={{
+        padding: 8,
+        background: "#999",
+        position: "fixed",
+        top: 10,
+        right: 10,
+        zIndex: 2147483647
+      }}>
+      {
+        readyToParse ?
+          <div>
+            <button style={btn} onClick={onStopParse}>Stop parse</button>
+            <div>parsed: {parsed}</div>
+          </div>
+          :
+          <div>
+            <button style={btn} onClick={() => {setReadyToParse(true)}}>Start parse</button>
+          </div>
+      }
 
-
-  useEffect(() => {
-    window.addEventListener("ext:net", event => {
-      // @ts-ignore
-      chequesHandler(event)
-    }, false);
-
-    return window.removeEventListener("ext:net", event => {
-      // @ts-ignore
-      chequesHandler(event)
-    }, false);
-  }, [])
-
-  return (<div
-    style={{
-      padding: 8,
-      background: "#999",
-      position: "fixed",
-      top: 10,
-      right: 10
-    }}>
-    <button style={btn} onClick={() => {}}>parsed: {parsed}</button>
-  </div>)
+    </div>
+  )
 }
 
 const btn: CSSProperties = {
