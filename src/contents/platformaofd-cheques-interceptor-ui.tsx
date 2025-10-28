@@ -1,12 +1,10 @@
 import type { PlasmoCSConfig } from "plasmo";
-import { useEffect, useState, type CSSProperties } from "react"
-import type { NetEvent } from "../utils/XhrRequestInterceptor"
-
-
-import { parseAndStoreCheques } from "~src/lib/cheque-parser.platformaofd";
+import { useEffect, useState, type CSSProperties } from "react";
 
 
 
+import type { NetEvent } from "../utils/XhrRequestInterceptor";
+import { parseCheques } from "~src/lib/cheque-parser.platformaofd"
 
 
 export const config: PlasmoCSConfig = {
@@ -15,16 +13,21 @@ export const config: PlasmoCSConfig = {
 };
 
 
-
 const QueryXhrForCheques = () => {
 
   const [parsed, setParsed] = useState(0)
 
-  const chequesHandler = async (event: NetEvent) => {
-    // @ts-ignore
-    const parsedCheques = await parseAndStoreCheques(event.detail.body)
-    setParsed(parsedCheques)
+  const chequesHandler = async (event: { detail: NetEvent }) => {
+    const rows = parseCheques(event.detail.body ?? "")
+    setParsed(rows.length)
+    await chrome.runtime.sendMessage({
+      type: "save-cheques",
+      rows,
+      meta: { source: "PlatformaOFD" }
+    })
   }
+
+
 
   useEffect(() => {
     window.addEventListener("ext:net", event => {

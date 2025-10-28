@@ -1,3 +1,8 @@
+import { datasetsRepo, type RowData } from "~src/lib/datasetsRepo";
+
+
+
+
 
 /** Публичная типизация одного чека. Все поля — строки. */
 export interface Cheque {
@@ -17,10 +22,62 @@ export interface Cheque {
 /** Внутренний (неэкспортируемый) тип заглушки сохранения. */
 type SaveChequesFn = (cheques: Cheque[]) => Promise<void> | void;
 
-/** Неброская заглушка для будущего Dexie. Сейчас — no-op. НЕ экспортируется. */
-const saveToDexie: SaveChequesFn = async (_cheques) => {
-  // TODO: реализовать сохранение в Dexie/DAK DB позднее.
-};
+const saveToDexie: SaveChequesFn = async (cheques) => {
+  if (!cheques?.length) return
+
+  const datasetId = await ensureActiveDataset()
+
+  // Маппим чек → RowData. Оставляем значения строками.
+  const rows: RowData[] = cheques.map(c => ({
+    // ключ строки: совпадает с id чека
+    key: c.id,
+    // полезные поля — в data
+    id: c.id,
+    detailsUrl: c.detailsUrl,
+    fnsStatus: c.fnsStatus,
+    paymentType: c.paymentType,
+    sign: c.sign,
+    date: c.date,
+    deviceName: c.deviceName,
+    sale: c.sale,
+    shift: c.shift,
+    amount: c.amount,
+    crptStatus: c.crptStatus
+  }))
+
+  // Дедуп внутри одной партии по key/id (на случай повторов в одном HTML).
+  const uniq = new Map<string, RowData>()
+  for (const r of rows) {
+    const k = String((r as any).key ?? (r as any).id ?? '')
+    if (k && !uniq.has(k)) uniq.set(k, r)
+  }
+
+  const batch = makeBatchId('ofd')
+  const ds = await datasetsRepo.ensureScoped()
+  await datasetsRepo.addRows(datasetId, Array.from(uniq.values()), {
+    source: 'PlatformaOFD',
+    batch
+  })
+}
+
+/* ----------------- helpers ----------------- */
+
+async function ensureActiveDataset(): Promise<string> {
+  const ds = await datasetsRepo.ensureScoped()
+  const id = await datasetsRepo.getActiveId()
+  if (id) {
+    return id
+  } else {
+      throw new NoActiveDatasetError()
+  }
+}
+
+function makeBatchId(prefix = 'ofd'): string {
+  const rnd = typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function'
+    ? (crypto as any).randomUUID().slice(0, 8)
+    : Math.random().toString(36).slice(2, 10)
+  return `${prefix}-${Date.now()}-${rnd}`
+}
 
 /**
  * Разобрать HTML таблицы чеков в объекты Cheque.
@@ -92,10 +149,18 @@ export function parseCheques(input: string | Element): Cheque[] {
  * Высокоуровневый сервис: парсит и «сохраняет».
  * Возвращает количество распарсенных чеков.
  * @param input HTML-строка с таблицей или корневой DOM-элемент
+ * @throws NoActiveDatasetError
  */
 export async function parseAndStoreCheques(input: string | Element): Promise<number> {
+  console.log(`parseAndStoreCheques: ${input}`)
   const cheques = parseCheques(input);
-  await saveToDexie(cheques); // сейчас это заглушка
+  try {
+    console.log(`parsed ${cheques.length} cheques:`, cheques);
+    await saveToDexie(cheques);
+  } catch (e) {
+    console.error("Error saving cheques:", e);
+    return 0;
+  }
   return cheques.length;
 }
 
@@ -130,4 +195,10 @@ function textOf(el?: Element | null): string {
 
 function isElement(x: unknown): x is Element {
   return typeof Element !== 'undefined' && x instanceof Element;
+}
+
+class NoActiveDatasetError extends Error {
+  constructor() {
+    super("No active dataset. Please select a dataset first.");
+  }
 }

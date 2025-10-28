@@ -1,17 +1,58 @@
+// viewer.tsx
 import React, { type CSSProperties, useEffect, useState } from "react"
-import  { type AItem, clearAItems, getAllAItems, upsertAItems } from "~src/lib/store"
-import { ensureATable, getConn, insertRowsAItemsPlain } from "~src/lib/duck"
+import { datasetsRepo, type DatasetRow } from "~src/lib/datasetsRepo"
 
-type Row = AItem
+// ---------------- types & helpers ----------------
+type UIRow = {
+  id: string
+  date: string
+  deviceName: string
+  amount: string
+  sign: string
+  paymentType: string
+  fnsStatus: string
+  crptStatus: string
+  sale: string
+  shift: string
+  detailsUrl: string
+  ts: number
+  source?: string
+  batch?: string
+}
 
-function useDuckReady() {
+const S = (v: unknown) => (v == null ? "" : String(v))
+
+function rowFromDatasetRow(r: DatasetRow): UIRow {
+  const d = (r.data || {}) as Record<string, unknown>
+  return {
+    id: S(d.id || d.key || ""),
+    date: S(d.date),
+    deviceName: S(d.deviceName),
+    amount: S(d.amount),           // показываем как хранится (строкой)
+    sign: S(d.sign),
+    paymentType: S(d.paymentType),
+    fnsStatus: S(d.fnsStatus),
+    crptStatus: S(d.crptStatus),
+    sale: S(d.sale),
+    shift: S(d.shift),
+    detailsUrl: S(d.detailsUrl),
+    ts: r.ts || Date.now(),
+    source: r.source ? String(r.source) : "",
+    batch: r.batch ? String(r.batch) : ""
+  }
+}
+
+// ---------------- boot ----------------
+function useBoot() {
   const [status, setStatus] = useState<"init" | "ready" | "error">("init")
   const [error, setError] = useState<string | null>(null)
+  const [datasetId, setDatasetId] = useState<string | null>(null)
+
   useEffect(() => {
     (async () => {
       try {
-        await ensureATable()
-        await seedFromStoreOnce()
+        const ds = await datasetsRepo.ensureScoped()
+        setDatasetId(ds.id)
         setStatus("ready")
       } catch (e) {
         console.error(e)
@@ -20,84 +61,74 @@ function useDuckReady() {
       }
     })()
   }, [])
-  // one-time seed helper lives outside component scope
-  async function seedFromStoreOnce() {
-    const data = await getAllAItems()
-    const conn = await getConn()
-    await conn.query("DELETE FROM a_items")
-    if (data.length) await insertRowsAItemsPlain(data)
-  }
-  return { status, error }
+
+  return { status, error, datasetId }
 }
 
+// ---------------- component ----------------
 export default function Viewer() {
-  const { status, error } = useDuckReady()
-  const [keyVal, setKeyVal] = useState("")
-  const [title, setTitle] = useState("")
-  const [price, setPrice] = useState("")
-  const [rows, setRows] = useState<Row[]>([])
+  const { status, error, datasetId } = useBoot()
+  const [rows, setRows] = useState<UIRow[]>([])
   const [busy, setBusy] = useState(false)
   const ready = status === "ready"
 
+  // форма (наши поля чеков)
+  const [idVal, setIdVal] = useState("")
+  const [date, setDate] = useState("")
+  const [deviceName, setDeviceName] = useState("")
+  const [amountText, setAmountText] = useState("")
+  const [sign, setSign] = useState("")
+  const [paymentType, setPaymentType] = useState("")
+  const [fnsStatus, setFnsStatus] = useState("")
+  const [crptStatus, setCrptStatus] = useState("")
+  const [sale, setSale] = useState("")
+  const [shift, setShift] = useState("")
+  const [detailsUrl, setDetailsUrl] = useState("")
+
   const refresh = async () => {
+    if (!datasetId) return
     setBusy(true)
     try {
-      const conn = await getConn()
-      const res = await conn.query(`SELECT key, title, price FROM a_items ORDER BY key`)
-      // @ts-ignore duckdb Result
-      setRows(res.toArray())
+      const rs = await datasetsRepo.listRows(datasetId, 100000, 0)
+      const ui = rs.map(rowFromDatasetRow).sort((a, b) => b.ts - a.ts || a.id.localeCompare(b.id))
+      setRows(ui)
     } finally { setBusy(false) }
   }
 
-  const syncFromStore = async () => {
+  const clearAll = async () => {
+    if (!datasetId) return
+    if (!confirm("Clear dataset rows?")) return
     setBusy(true)
     try {
-      const data = await getAllAItems()
-      const conn = await getConn()
-      await conn.query("DELETE FROM a_items")
-      if (data.length) await insertRowsAItemsPlain(data)
+      await datasetsRepo.clearRows(datasetId)
       await refresh()
     } finally { setBusy(false) }
   }
 
   const insertRow = async () => {
-    if (!keyVal.trim()) return alert("Please enter key")
-    const num = price.trim() === "" ? null : Number(price)
-    if (price.trim() !== "" && Number.isNaN(num)) return alert("Price must be a number")
+    if (!datasetId) return
+    if (!idVal.trim()) return alert("Please enter id")
+
+    const data: Record<string, unknown> = {
+      id: idVal.trim(),
+      date: date.trim(),
+      deviceName: deviceName.trim(),
+      amount: amountText,     // храним как строку — как договорились
+      sign: sign.trim(),
+      paymentType: paymentType.trim(),
+      fnsStatus: fnsStatus.trim(),
+      crptStatus: crptStatus.trim(),
+      sale: sale.trim(),
+      shift: shift.trim(),
+      detailsUrl: detailsUrl.trim()
+    }
 
     setBusy(true)
     try {
-      const row: Row = { key: keyVal.trim(), title: title || null, price: num }
-      // persist canonically in IndexedDB
-      await upsertAItems([row])
-      // reflect into current DuckDB session
-      await insertRowsAItemsPlain([row])
-      setKeyVal(""); setTitle(""); setPrice("")
-      await refresh()
-    } finally { setBusy(false) }
-  }
-
-  const insertDemo = async () => {
-    setBusy(true)
-    try {
-      const demo: Row[] = [
-        { key: "SKU-1", title: "Sample A", price: 10.5 },
-        { key: "SKU-2", title: "Sample B", price: 12.0 },
-        { key: "SKU-3", title: "Sample C", price: null }
-      ]
-      await upsertAItems(demo)
-      await insertRowsAItemsPlain(demo)
-      await refresh()
-    } finally { setBusy(false) }
-  }
-
-  const clearAll = async () => {
-    if (!confirm("Clear DuckDB table AND persistent store?")) return
-    setBusy(true)
-    try {
-      const conn = await getConn()
-      await conn.query("DELETE FROM a_items")
-      await clearAItems()
+      await datasetsRepo.addRows(datasetId, [data], { source: "PlatformaOFD" })
+      // очистка формы
+      setIdVal(""); setDate(""); setDeviceName(""); setAmountText(""); setSign(""); setPaymentType("")
+      setFnsStatus(""); setCrptStatus(""); setSale(""); setShift(""); setDetailsUrl("")
       await refresh()
     } finally { setBusy(false) }
   }
@@ -108,8 +139,10 @@ export default function Viewer() {
     <div style={wrap}>
       <header style={header}>
         <div>
-          <h2 style={{ margin: 0 }}>DuckDB Viewer</h2>
-          <div style={{ color: "#666", fontSize: 12 }}>Status: {status}{error ? ` — ${error}` : ""}</div>
+          <h2 style={{ margin: 0 }}>Cheques Viewer</h2>
+          <div style={{ color: "#666", fontSize: 12 }}>
+            Status: {status}{error ? ` — ${error}` : ""}{datasetId ? ` — dataset: ${datasetId}` : ""}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button style={ghostBtn} onClick={() => window.close()}>Close</button>
@@ -117,27 +150,52 @@ export default function Viewer() {
       </header>
 
       <section style={card}>
-        <div style={grid3}>
+        <div style={gridActions}>
           <button style={btn} onClick={refresh} disabled={!ready || busy}>Refresh</button>
-          <button style={btn} onClick={syncFromStore} disabled={!ready || busy}>Sync from Store</button>
           <button style={{ ...btn, background: "#b91c1c" }} onClick={clearAll} disabled={!ready || busy}>Clear All</button>
           <div style={{ color: "#666", fontSize: 12 }}>
-            Persistent store: IndexedDB (Dexie). Each viewer loads from it.
+            Источник: IndexedDB (Dexie / datasetsRepo). Никакого DuckDB — просто читаем и показываем.
           </div>
         </div>
       </section>
 
       <section style={card}>
-        <h3 style={{ marginTop: 0 }}>Insert Row</h3>
-        <div style={grid3}>
-          <label style={label}>key</label>
-          <input style={input} value={keyVal} onChange={(e) => setKeyVal(e.target.value)} placeholder="SKU-123" />
-          <label style={label}>title</label>
-          <input style={input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Item name" />
-          <label style={label}>price</label>
-          <input style={input} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="12.34" />
+        <h3 style={{ marginTop: 0 }}>Insert Row (Cheque)</h3>
+        <div style={gridForm}>
+          <label style={label}>id</label>
+          <input style={input} value={idVal} onChange={e => setIdVal(e.target.value)} placeholder="150331958551" />
+
+          <label style={label}>date</label>
+          <input style={input} value={date} onChange={e => setDate(e.target.value)} placeholder="23.10.2025 15:50" />
+
+          <label style={label}>deviceName</label>
+          <input style={input} value={deviceName} onChange={e => setDeviceName(e.target.value)} placeholder="Табачный Дом Льва Толстого 19" />
+
+          <label style={label}>amount</label>
+          <input style={input} value={amountText} onChange={e => setAmountText(e.target.value)} placeholder="258 ₽" />
+
+          <label style={label}>sign</label>
+          <input style={input} value={sign} onChange={e => setSign(e.target.value)} placeholder="Приход" />
+
+          <label style={label}>paymentType</label>
+          <input style={input} value={paymentType} onChange={e => setPaymentType(e.target.value)} placeholder="Оплата картой" />
+
+          <label style={label}>fnsStatus</label>
+          <input style={input} value={fnsStatus} onChange={e => setFnsStatus(e.target.value)} placeholder="Принят" />
+
+          <label style={label}>crptStatus</label>
+          <input style={input} value={crptStatus} onChange={e => setCrptStatus(e.target.value)} placeholder="Не будет отправлен..." />
+
+          <label style={label}>sale</label>
+          <input style={input} value={sale} onChange={e => setSale(e.target.value)} placeholder="56" />
+
+          <label style={label}>shift</label>
+          <input style={input} value={shift} onChange={e => setShift(e.target.value)} placeholder="206" />
+
+          <label style={label}>detailsUrl</label>
+          <input style={input} value={detailsUrl} onChange={e => setDetailsUrl(e.target.value)} placeholder="/web/auth/cheques/details/..." />
+
           <button style={btn} onClick={insertRow} disabled={!ready || busy}>Insert</button>
-          <button style={ghostBtn} onClick={insertDemo} disabled={!ready || busy}>Insert demo</button>
         </div>
       </section>
 
@@ -146,37 +204,60 @@ export default function Viewer() {
         {rows.length === 0 ? (
           <div style={{ color: "#777" }}>empty</div>
         ) : (
-          <div style={{ overflow: "auto", maxHeight: 420 }}>
+          <div style={{ overflow: "auto", maxHeight: 520 }}>
             <table style={table}>
               <thead>
               <tr>
-                <th>key</th>
-                <th>title</th>
-                <th style={{ textAlign: "right" }}>price</th>
+                <th>id</th>
+                <th>date</th>
+                <th>deviceName</th>
+                <th>amount</th>
+                <th>sign</th>
+                <th>paymentType</th>
+                <th>fnsStatus</th>
+                <th>crptStatus</th>
+                <th>sale</th>
+                <th>shift</th>
+                <th>detailsUrl</th>
+                <th>ts</th>
+                <th>source</th>
+                <th>batch</th>
               </tr>
-            </thead>
-            <tbody>
-            {rows.map((r) => (
-              <tr key={r.key}>
-                <td>{r.key}</td>
-                <td>{r.title ?? ""}</td>
-                <td style={{ textAlign: "right" }}>{r.price ?? ""}</td>
-              </tr>
-            ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+              {rows.map((r) => (
+                <tr key={`${r.ts}-${r.id}`}>
+                  <td>{r.id}</td>
+                  <td>{r.date}</td>
+                  <td>{r.deviceName}</td>
+                  <td>{r.amount}</td>
+                  <td>{r.sign}</td>
+                  <td>{r.paymentType}</td>
+                  <td>{r.fnsStatus}</td>
+                  <td>{r.crptStatus}</td>
+                  <td>{r.sale}</td>
+                  <td>{r.shift}</td>
+                  <td style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.detailsUrl}</td>
+                  <td>{r.ts}</td>
+                  <td>{r.source ?? ""}</td>
+                  <td>{r.batch ?? ""}</td>
+                </tr>
+              ))}
+              </tbody>
+            </table>
           </div>
-          )}
+        )}
       </section>
     </div>
   )
 }
 
-// styles
+// ---------------- styles ----------------
 const wrap: CSSProperties = { padding: 16, fontFamily: "system-ui, Segoe UI, Roboto, Arial, sans-serif", color: "#111" }
 const header: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }
 const card: CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, marginBottom: 12, background: "#fff" }
-const grid3: CSSProperties = { display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr 80px 1fr auto auto", gap: 8, alignItems: "center" }
+const gridActions: CSSProperties = { display: "grid", gridTemplateColumns: "120px 120px 1fr", gap: 8, alignItems: "center" }
+const gridForm: CSSProperties = { display: "grid", gridTemplateColumns: "120px 1fr 120px 1fr", gap: 8, alignItems: "center" }
 const label: CSSProperties = { fontSize: 12, color: "#555" }
 const input: CSSProperties = { padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 10, outline: "none" }
 const btn: CSSProperties = { padding: "8px 12px", borderRadius: 10, border: "1px solid #111", background: "#111", color: "#fff", cursor: "pointer" }

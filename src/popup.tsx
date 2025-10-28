@@ -1,13 +1,6 @@
-import { log } from "node:util";
 import React from "react";
-
-
-
 import ComboBox from "~src/components/ComboBox";
-import { selectionsRepo, type Selection } from "~src/lib/selectionsRepo";
-
-
-
+import { datasetsRepo, type Dataset } from "~src/lib/datasetsRepo";
 
 
 // domains where parsing is enabled (tune later)
@@ -17,8 +10,8 @@ const SUPPORTED_HOSTS = [
 ]
 
 export default function Popup() {
-  const [list, setList] = React.useState<Selection[]>([])
-  const [active, setActive] = React.useState<Selection | null>(null)
+  const [list, setList] = React.useState<Dataset[]>([])
+  const [active, setActive] = React.useState<Dataset | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [hostInfo, setHostInfo] = React.useState<{ host: string | null; supported: boolean; tabId: number | null }>({ host: null, supported: false, tabId: null })
 
@@ -27,7 +20,8 @@ export default function Popup() {
   }, [])
 
   async function refresh() {
-    const [items, id] = await Promise.all([selectionsRepo.list(), selectionsRepo.getActiveId()])
+    const ds = await datasetsRepo.ensureScoped();
+    const [items, id] = await Promise.all([datasetsRepo.list(), datasetsRepo.getActiveId()])
     setList(items)
     setActive(id ? items.find((x) => x.id === id) ?? null : null)
     await detectHost()
@@ -52,12 +46,13 @@ export default function Popup() {
     }
   }
 
-  const onPick = async (s: Selection | null) => {
-    await selectionsRepo.setActiveId(s?.id ?? null)
+  const onPick = async (s: Dataset | null) => {
+    const ds = await datasetsRepo.ensureScoped();
+    await datasetsRepo.setActiveId(s?.id ?? null)
     await refresh()
   }
 
-  const openSelectionsTab = () => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/selections.html") })
+  const openSelectionsTab = () => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/datasets.html") })
   const openViewer = () => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/viewer.html" + (active ? `?sid=${active.id}` : "")) })
   const openCompare = () => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/compare.html") }) // placeholder for future
 
@@ -78,7 +73,7 @@ export default function Popup() {
       console.log("start parse on tab", tab.id, "with selection", active?.id, "active?", active ? "yes" : "no")
       // const res = await chrome.tabs.sendMessage(tab.id, {
       //   type: "START_PARSE",
-      //   selectionId: active?.id
+      //   datasetId: active?.id
       // })
       const res = await chrome.runtime.sendMessage({
         type: "START_PARSE",
@@ -117,7 +112,7 @@ export default function Popup() {
       {/* Quick switch via ComboBox */}
       <div style={card}>
         <div style={{ marginBottom: 8, color: "#666", fontSize: 12 }}>Switch dataset</div>
-        <ComboBox<Selection>
+        <ComboBox<Dataset>
           items={list}
           getId={(s) => s.id}
           getText={(s) => s.name}
