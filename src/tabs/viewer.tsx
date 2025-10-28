@@ -235,7 +235,7 @@ export default function Viewer() {
         {rows.length === 0 ? (
           <div style={{ color: "#777" }}>empty</div>
         ) : (
-          <div style={{ overflow: "auto", maxHeight: 520 }}>
+          <div style={{ overflow: "auto", maxHeight: 650 }}>
             <table style={table}>
               <thead>
               <tr>

@@ -249,6 +249,10 @@ export class DatasetsRepo {
     await this.setActiveId(created.id)
     return created
   }
+
+  async exportJSON(id: string) {
+    throw new Error("Not implemented")
+  }
 }
 
 export const datasetsRepo = DatasetsRepo.instance()

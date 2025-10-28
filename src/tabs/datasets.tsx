@@ -112,9 +112,11 @@ export default function DatasetsPage() {
       {dataset && (
         <section style={card}>
           <h3 style={{ marginTop: 0 }}>{dataset.name}</h3>
+
           <div style={{ color:'#666', fontSize:12, marginBottom:8 }}>
             Rows: {stats?.count ?? 0} · Updated: {new Date(dataset.updatedAt).toLocaleString()}
           </div>
+
           <details>
             <summary style={{ cursor:'pointer', color:'#111' }}>Note</summary>
             <textarea
