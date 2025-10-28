@@ -28,7 +28,7 @@ function rowFromDatasetRow(r: DatasetRow): UIRow {
     id: S(d.id || d.key || ""),
     date: S(d.date),
     deviceName: S(d.deviceName),
-    amount: S(d.amount),           // показываем как хранится (строкой)
+    amount: S(d.amount),
     sign: S(d.sign),
     paymentType: S(d.paymentType),
     fnsStatus: S(d.fnsStatus),
@@ -65,14 +65,32 @@ function useBoot() {
   return { status, error, datasetId }
 }
 
-// ---------------- component ----------------
+
 export default function Viewer() {
   const { status, error, datasetId } = useBoot()
   const [rows, setRows] = useState<UIRow[]>([])
   const [busy, setBusy] = useState(false)
   const ready = status === "ready"
 
-  // форма (наши поля чеков)
+  const parseRuDate = (s?: string): number => {
+    if (typeof s !== "string") return Infinity
+    const matches = s.match(
+      /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/
+    )
+    if (!matches) return Infinity
+    const [, dd, MM, yyyy, HH = "00", mm = "00", ss = "00"] = matches
+    return Date.UTC(+yyyy, +MM - 1, +dd, +HH, +mm, +ss)
+  }
+
+  const sortedRows = [...rows].sort((a, b) => {
+    const ta = parseRuDate(a.date)
+    const tb = parseRuDate(b.date)
+    return ta - tb || String(a.id).localeCompare(String(b.id))
+  })
+
+
+  const [addRowFormOpen, setAddRowFormOpen] = useState(false)
+
   const [idVal, setIdVal] = useState("")
   const [date, setDate] = useState("")
   const [deviceName, setDeviceName] = useState("")
@@ -113,7 +131,7 @@ export default function Viewer() {
       id: idVal.trim(),
       date: date.trim(),
       deviceName: deviceName.trim(),
-      amount: amountText,     // храним как строку — как договорились
+      amount: amountText,
       sign: sign.trim(),
       paymentType: paymentType.trim(),
       fnsStatus: fnsStatus.trim(),
@@ -160,8 +178,24 @@ export default function Viewer() {
       </section>
 
       <section style={card}>
-        <h3 style={{ marginTop: 0 }}>Insert Row (Cheque)</h3>
-        <div style={gridForm}>
+        <div style={collapseHeader}>
+          <h3 style={{ margin: 0 }}>Insert Row (Cheque)</h3>
+          <button
+            type="button"
+            style={ghostBtn}
+            onClick={() => setAddRowFormOpen(o => !o)}
+            aria-expanded={addRowFormOpen}
+            aria-controls="cheque-form"
+          >
+            <span style={{ marginRight: 6 }}>{addRowFormOpen ? "Свернуть" : "Развернуть"}</span>
+            <span style={chevron(addRowFormOpen)}>▸</span>
+          </button>
+        </div>
+
+        <div
+          id="cheque-form"
+          style={{ ...gridForm, display: addRowFormOpen ? "grid" : "none" }}
+        >
           <label style={label}>id</label>
           <input style={input} value={idVal} onChange={e => setIdVal(e.target.value)} placeholder="150331958551" />
 
@@ -221,11 +255,10 @@ export default function Viewer() {
                 <th>detailsUrl</th>
                 <th>ts</th>
                 <th>source</th>
-                <th>batch</th>
               </tr>
               </thead>
               <tbody>
-              {rows.map((r) => (
+              {sortedRows.map((r) => (
                 <tr key={`${r.ts}-${r.id}`}>
                   <td>{r.id}</td>
                   <td>{r.date}</td>
@@ -240,7 +273,6 @@ export default function Viewer() {
                   <td style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.detailsUrl}</td>
                   <td>{r.ts}</td>
                   <td>{r.source ?? ""}</td>
-                  <td>{r.batch ?? ""}</td>
                 </tr>
               ))}
               </tbody>
@@ -263,6 +295,12 @@ const input: CSSProperties = { padding: "8px 10px", border: "1px solid #e5e7eb",
 const btn: CSSProperties = { padding: "8px 12px", borderRadius: 10, border: "1px solid #111", background: "#111", color: "#fff", cursor: "pointer" }
 const ghostBtn: CSSProperties = { padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", color: "#111", cursor: "pointer" }
 const table: CSSProperties = { width: "100%", borderCollapse: "collapse" }
+const collapseHeader: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }
+const chevron = (open: boolean): CSSProperties => ({
+  display: "inline-block",
+  transition: "transform 120ms ease",
+  transform: open ? "rotate(90deg)" : "rotate(0deg)"
+})
 
 const styleEl2 = document.createElement("style")
 styleEl2.textContent = `
