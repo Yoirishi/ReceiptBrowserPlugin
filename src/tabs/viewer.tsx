@@ -1,9 +1,10 @@
 // viewer.tsx
 import React, { type CSSProperties, useEffect, useState } from "react"
 import { datasetsRepo, type DatasetRow } from "~src/lib/datasetsRepo"
+import useTabBoot from "~src/utils/useTabBoot"
 
 // ---------------- types & helpers ----------------
-type UIRow = {
+export type UIRow = {
   id: string
   date: string
   deviceName: string
@@ -22,7 +23,7 @@ type UIRow = {
 
 const S = (v: unknown) => (v == null ? "" : String(v))
 
-function rowFromDatasetRow(r: DatasetRow): UIRow {
+export function rowFromDatasetRow(r: DatasetRow): UIRow {
   const d = (r.data || {}) as Record<string, unknown>
   return {
     id: S(d.id || d.key || ""),
@@ -42,32 +43,9 @@ function rowFromDatasetRow(r: DatasetRow): UIRow {
   }
 }
 
-// ---------------- boot ----------------
-function useBoot() {
-  const [status, setStatus] = useState<"init" | "ready" | "error">("init")
-  const [error, setError] = useState<string | null>(null)
-  const [datasetId, setDatasetId] = useState<string | null>(null)
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const ds = await datasetsRepo.ensureScoped()
-        setDatasetId(ds.id)
-        setStatus("ready")
-      } catch (e) {
-        console.error(e)
-        setError(String(e))
-        setStatus("error")
-      }
-    })()
-  }, [])
-
-  return { status, error, datasetId }
-}
-
 
 export default function Viewer() {
-  const { status, error, datasetId } = useBoot()
+  const { status, error, datasetId } = useTabBoot()
   const [rows, setRows] = useState<UIRow[]>([])
   const [busy, setBusy] = useState(false)
   const ready = status === "ready"
@@ -239,36 +217,30 @@ export default function Viewer() {
             <table style={table}>
               <thead>
               <tr>
-                <th>id</th>
                 <th>date</th>
                 <th>deviceName</th>
                 <th>amount</th>
                 <th>sign</th>
                 <th>paymentType</th>
                 <th>fnsStatus</th>
-                <th>crptStatus</th>
                 <th>sale</th>
                 <th>shift</th>
                 <th>detailsUrl</th>
-                <th>ts</th>
                 <th>source</th>
               </tr>
               </thead>
               <tbody>
               {sortedRows.map((r) => (
                 <tr key={`${r.ts}-${r.id}`}>
-                  <td>{r.id}</td>
                   <td>{r.date}</td>
                   <td>{r.deviceName}</td>
                   <td>{r.amount}</td>
                   <td>{r.sign}</td>
                   <td>{r.paymentType}</td>
                   <td>{r.fnsStatus}</td>
-                  <td>{r.crptStatus}</td>
                   <td>{r.sale}</td>
                   <td>{r.shift}</td>
                   <td style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.detailsUrl}</td>
-                  <td>{r.ts}</td>
                   <td>{r.source ?? ""}</td>
                 </tr>
               ))}
