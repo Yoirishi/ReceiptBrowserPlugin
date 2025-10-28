@@ -156,26 +156,23 @@ export default function Viewer() {
   return (
     <div style={wrap}>
       <header style={header}>
-        <div>
-          <h2 style={{ margin: 0 }}>Cheques Viewer</h2>
-          <div style={{ color: "#666", fontSize: 12 }}>
-            Status: {status}{error ? ` — ${error}` : ""}{datasetId ? ` — dataset: ${datasetId}` : ""}
+        <div style={{ display: "flex", gap: 12, flexDirection: "row", justifyContent: "flex-end", alignItems: "center"  }}>
+          <div>
+            <h2 style={{ margin: 0 }}>Cheques Viewer</h2>
+            <div style={{ color: "#666", fontSize: 12 }}>
+              Status: {status}{error ? ` — ${error}` : ""}{datasetId ? ` — dataset: ${datasetId}` : ""}
+            </div>
+          </div>
+          <div style={gridActions}>
+            <button style={btn} onClick={refresh} disabled={!ready || busy}>Refresh</button>
+            <button style={{ ...btn, background: "#b91c1c" }} onClick={clearAll} disabled={!ready || busy}>Clear All</button>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+
+        <div style={{ display: "flex", gap: 8}}>
           <button style={ghostBtn} onClick={() => window.close()}>Close</button>
         </div>
       </header>
-
-      <section style={card}>
-        <div style={gridActions}>
-          <button style={btn} onClick={refresh} disabled={!ready || busy}>Refresh</button>
-          <button style={{ ...btn, background: "#b91c1c" }} onClick={clearAll} disabled={!ready || busy}>Clear All</button>
-          <div style={{ color: "#666", fontSize: 12 }}>
-            Источник: IndexedDB (Dexie / datasetsRepo). Никакого DuckDB — просто читаем и показываем.
-          </div>
-        </div>
-      </section>
 
       <section style={card}>
         <div style={collapseHeader}>
