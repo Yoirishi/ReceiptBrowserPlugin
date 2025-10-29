@@ -6,34 +6,102 @@ import { datasetsRepo } from "~src/lib/datasetsRepo";
 import { rowFromDatasetRow, type UIRow } from "~src/tabs/viewer";
 import useTabBoot from "~src/utils/useTabBoot";
 
+type SummaryBySource = {
+  summaryCash: number,
+  summaryCard: number,
+  total: number,
+  chequesCount: number,
+}
 
+function chequesEqual(a: UIRow, b: UIRow) {
+  return (a.source !== b.source) &&
+    (a.date === b.date) &&
+    (a.amount === b.amount) &&
+    (a.shift === b.shift) &&
+    (a.sign === b.sign) &&
+    (a.paymentType === b.paymentType) &&
+    (a.sale === b.sale)
+}
 
+function diffCheques(
+  left: UIRow[],
+  right: UIRow[]
+): { onlyLeft: UIRow[]; onlyRight: UIRow[] } {
+  const onlyLeft: UIRow[] = []
+  const restRight: UIRow[] = [...right]
+
+  outer: for (const a of left) {
+    for (let i = 0; i < restRight.length; i++) {
+      if (chequesEqual(a, restRight[i])) {
+        restRight.splice(i, 1)
+        continue outer
+      }
+    }
+    onlyLeft.push(a)
+  }
+
+  return { onlyLeft, onlyRight: restRight }
+}
 
 
 export default function ComparePage() {
   const { status, error, datasetId } = useTabBoot()
   const [rows, setRows] = useState<UIRow[]>([])
   const ready = status === "ready"
-  const [busy, setBusy] = useState(false)
+  const [retrievingFromDb, setRetrievingFromDb] = useState(false)
+  const [isDataCompared, setIsDataCompared] = useState(false)
   const [platformaCheques, setPlatformaCheques] = useState<UIRow[]>([])
+  const [costviserCheques, setCostviserCheques] = useState<UIRow[]>([])
+  const [chequesDiff, setChequesDiff] = useState<UIRow[]>([])
+  const [summaryByPlatformaOfd, setSummaryByPlatformaOfd] = useState<SummaryBySource>({summaryCard: 0, summaryCash: 0, total: 0, chequesCount: 0})
+  const [summaryByCostviser, setSummaryByCostviser] = useState<SummaryBySource>({summaryCard: 0, summaryCash: 0, total: 0, chequesCount: 0})
 
   const refresh = async () => {
     if (!datasetId) return
-    setBusy(true)
+    setRetrievingFromDb(true)
     try {
       const rs = await datasetsRepo.listRows(datasetId, 100000, 0)
       const ui = rs.map(rowFromDatasetRow).sort((a, b) => b.ts - a.ts || a.id.localeCompare(b.id))
       setRows(ui)
-    } finally { setBusy(false) }
+    } finally { setRetrievingFromDb(false) }
   }
+
 
   const compare = async () => {
+    const { onlyLeft, onlyRight } = diffCheques(platformaCheques, costviserCheques)
 
+    setSummaryByPlatformaOfd({
+      summaryCard: platformaCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+Number(row.amount), 0),
+      summaryCash: platformaCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+Number(row.amount), 0),
+      total: platformaCheques.reduce((acc, row) => acc+Number(row.amount), 0),
+      chequesCount: platformaCheques.length
+    })
+
+    setSummaryByCostviser({
+      summaryCard: costviserCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+Number(row.amount), 0),
+      summaryCash: costviserCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+Number(row.amount), 0),
+      total: costviserCheques.reduce((acc, row) => acc+Number(row.amount), 0),
+      chequesCount: costviserCheques.length
+    })
+
+    setChequesDiff([...onlyLeft, ...onlyRight])
+    setIsDataCompared(true)
   }
+
 
   useEffect(() => {
     if (ready) {
       void refresh()
+      if (rows.length === 0) return
+
+      rows.forEach(row => {
+        if (row.source === "PlatformaOFD") {
+          setPlatformaCheques(prev => [...prev, row])
+        } else if (row.source === "Costviser") {
+          setCostviserCheques(prev => [...prev, row])
+        }
+      })
+
       void compare()
     }
   }, [ready])
@@ -54,6 +122,62 @@ export default function ComparePage() {
           <button style={ghostBtn} onClick={() => window.close()}>Close</button>
         </div>
       </header>
+
+
+      { !isDataCompared ?
+          <>
+            <>
+              chequesDiff.length === 0 ?
+                  <section style={card}>
+                    <h3 style={{ marginTop: 0 }}>Cheques are equal</h3>
+                  </section>
+                :
+                  <section style={card}>
+                    <h3 style={{ marginTop: 0 }}>Cheques diff ({chequesDiff.length})</h3>
+                    <div style={{ overflow: "auto", maxHeight: 650 }}>
+                      <table style={table}>
+                        <thead>
+                        <tr>
+                          <th>date</th>
+                          <th>deviceName</th>
+                          <th>amount</th>
+                          <th>sign</th>
+                          <th>paymentType</th>
+                          <th>fnsStatus</th>
+                          <th>sale</th>
+                          <th>shift</th>
+                          <th>detailsUrl</th>
+                          <th>source</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {chequesDiff.map((r) => (
+                          <tr key={`${r.ts}-${r.id}`}>
+                            <td>{r.date}</td>
+                            <td>{r.deviceName}</td>
+                            <td>{r.amount}</td>
+                            <td>{r.sign}</td>
+                            <td>{r.paymentType}</td>
+                            <td>{r.fnsStatus}</td>
+                            <td>{r.sale}</td>
+                            <td>{r.shift}</td>
+                            <td style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.detailsUrl}</td>
+                            <td>{r.source ?? ""}</td>
+                          </tr>
+                        ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+            </>
+            <section style={card}> </section>
+          </>
+          :
+              <section style={card}>
+                <h3 style={{ marginTop: 0 }}>Data is comparing now, please wait...</h3>
+              </section>
+      }
+
     </div>);
 }
 
@@ -66,3 +190,4 @@ const label: CSSProperties = { fontSize: 12, color: "#555" }
 const input: CSSProperties = { padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 10, outline: "none" }
 const btn: CSSProperties = { padding: "8px 12px", borderRadius: 10, border: "1px solid #111", background: "#111", color: "#fff", cursor: "pointer" }
 const ghostBtn: CSSProperties = { padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", color: "#111", cursor: "pointer" }
+const table: CSSProperties = { width: "100%", borderCollapse: "collapse" }
