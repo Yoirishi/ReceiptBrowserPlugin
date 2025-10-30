@@ -133,15 +133,15 @@ export default function ComparePage() {
 
 
     setSummaryByPlatformaOfd({
-      summaryCard: platformaCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseFloat(row.amount), 0),
-      summaryCash: platformaCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      summaryCard: platformaCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      summaryCash: platformaCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseFloat(row.amount), 0),
       total: platformaCheques.reduce((acc, row) => acc+parseFloat(row.amount), 0),
       chequesCount: platformaCheques.length
     })
 
     setSummaryByCostviser({
-      summaryCard: costviserCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseFloat(row.amount), 0),
-      summaryCash: costviserCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      summaryCard: costviserCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      summaryCash: costviserCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseFloat(row.amount), 0),
       total: costviserCheques.reduce((acc, row) => acc+parseFloat(row.amount), 0),
       chequesCount: costviserCheques.length
     })
@@ -224,7 +224,7 @@ export default function ComparePage() {
                     <div>Суммарно оплата картой: {summaryByPlatformaOfd.summaryCard}</div>
                     <div>Суммарно оплата наличными: {summaryByPlatformaOfd.summaryCash}</div>
                     <div>Всего за период: {summaryByPlatformaOfd.total}</div>
-                    <div>Количество чеков за периода: {summaryByPlatformaOfd.chequesCount}</div>
+                    <div>Количество чеков за период: {summaryByPlatformaOfd.chequesCount}</div>
                   </div>
                 </div>
                 <div style={{flex: 1}}>
@@ -233,7 +233,7 @@ export default function ComparePage() {
                     <div>Суммарно оплата картой: {summaryByCostviser.summaryCard}</div>
                     <div>Суммарно оплата наличными: {summaryByCostviser.summaryCash}</div>
                     <div>Всего за период: {summaryByCostviser.total}</div>
-                    <div>Количество чеков за периода: {summaryByCostviser.chequesCount}</div>
+                    <div>Количество чеков за период: {summaryByCostviser.chequesCount}</div>
                   </div>
                 </div>
                 <div style={{flex: 1}}>
