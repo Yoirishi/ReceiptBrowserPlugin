@@ -6,6 +6,7 @@ import { datasetsRepo } from "~src/lib/datasetsRepo";
 import { rowFromDatasetRow, type UIRow } from "~src/tabs/viewer";
 import useTabBoot from "~src/utils/useTabBoot";
 
+
 type SummaryBySource = {
   summaryCash: number,
   summaryCard: number,
@@ -66,52 +67,85 @@ export default function ComparePage() {
     } finally { setRetrievingFromDb(false) }
   }
 
+  // useEffect(() => {
+  //   if (ready) {
+  //     void refresh()
+  //     if (rows.length === 0) return
+  //
+  //     rows.forEach(row => {
+  //       if (row.source === "PlatformaOFD") {
+  //         setPlatformaCheques(prev => [...prev, row])
+  //       } else if (row.source === "Costviser") {
+  //         setCostviserCheques(prev => [...prev, row])
+  //       }
+  //     })
+  //
+  //     void compare()
+  //   }
+  // }, [ready])
 
-  const compare = async () => {
+  useEffect(() => {
+    if (!ready) return
+
+    ;(async () => {
+      await refresh()
+    })()
+
+  }, [ready])
+
+  useEffect(() => {
+    if (!ready) return
+    ;(async () => {
+      if (rows.length === 0) return
+
+      const plat: UIRow[] = []
+      const cost: UIRow[] = []
+
+      for (const row of rows) {
+        if (row.source === "PlatformaOFD") plat.push(row)
+        else if (row.source === "Costviser") cost.push(row)
+      }
+
+      setPlatformaCheques(prev => [...prev, ...plat])
+      setCostviserCheques(prev => [...prev, ...cost])
+    })()
+  }, [ready, rows])
+
+
+  useEffect(() => {
+    if (!ready) return
+
+    if (platformaCheques.length === 0 || costviserCheques.length === 0) return
+
     const { onlyLeft, onlyRight } = diffCheques(platformaCheques, costviserCheques)
 
+
+
     setSummaryByPlatformaOfd({
-      summaryCard: platformaCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+Number(row.amount), 0),
-      summaryCash: platformaCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+Number(row.amount), 0),
-      total: platformaCheques.reduce((acc, row) => acc+Number(row.amount), 0),
+      summaryCard: platformaCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      summaryCash: platformaCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      total: platformaCheques.reduce((acc, row) => acc+parseFloat(row.amount), 0),
       chequesCount: platformaCheques.length
     })
 
     setSummaryByCostviser({
-      summaryCard: costviserCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+Number(row.amount), 0),
-      summaryCash: costviserCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+Number(row.amount), 0),
-      total: costviserCheques.reduce((acc, row) => acc+Number(row.amount), 0),
+      summaryCard: costviserCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      summaryCash: costviserCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      total: costviserCheques.reduce((acc, row) => acc+parseFloat(row.amount), 0),
       chequesCount: costviserCheques.length
     })
 
     setChequesDiff([...onlyLeft, ...onlyRight])
+
     setIsDataCompared(true)
-  }
-
-
-  useEffect(() => {
-    if (ready) {
-      void refresh()
-      if (rows.length === 0) return
-
-      rows.forEach(row => {
-        if (row.source === "PlatformaOFD") {
-          setPlatformaCheques(prev => [...prev, row])
-        } else if (row.source === "Costviser") {
-          setCostviserCheques(prev => [...prev, row])
-        }
-      })
-
-      void compare()
-    }
-  }, [ready])
+  }, [ready, platformaCheques, costviserCheques])
 
   return (
     <div style={wrap}>
       <header style={header}>
         <div style={{ display: "flex", gap: 12, flexDirection: "row", justifyContent: "flex-end", alignItems: "center"  }}>
           <div>
-            <h2 style={{ margin: 0 }}>Cheques Comparator</h2>
+            <h2 style={{ margin: 0 }} onClick={() => console.log(isDataCompared, summaryByPlatformaOfd, summaryByCostviser, chequesDiff)}>Cheques Comparator</h2>
             <div style={{ color: "#666", fontSize: 12 }}>
               Status: {status}{error ? ` — ${error}` : ""}{datasetId ? ` — dataset: ${datasetId}` : ""}
             </div>
@@ -124,10 +158,10 @@ export default function ComparePage() {
       </header>
 
 
-      { !isDataCompared ?
+      { isDataCompared ?
           <>
             <>
-              chequesDiff.length === 0 ?
+              {chequesDiff.length === 0 ?
                   <section style={card}>
                     <h3 style={{ marginTop: 0 }}>Cheques are equal</h3>
                   </section>
@@ -169,8 +203,39 @@ export default function ComparePage() {
                       </table>
                     </div>
                   </section>
+              }
             </>
-            <section style={card}> </section>
+            <section style={card}>
+              <div style={{display: "flex", flexDirection: "row"}}>
+                <div style={{flex: 1}}>
+                  <h3 style={{ marginTop: 0 }}>PlatformaOFD Summary</h3>
+                  <div style={{display: "flex", flexDirection: "column", justifyContent: "space-between"}}>
+                    <div>Суммарно оплата картой: {summaryByPlatformaOfd.summaryCard}</div>
+                    <div>Суммарно оплата наличными: {summaryByPlatformaOfd.summaryCash}</div>
+                    <div>Всего за период: {summaryByPlatformaOfd.total}</div>
+                    <div>Количество чеков за периода: {summaryByPlatformaOfd.chequesCount}</div>
+                  </div>
+                </div>
+                <div style={{flex: 1}}>
+                  <h3 style={{ marginTop: 0 }}>Costviser Summary</h3>
+                  <div style={{display: "flex", flexDirection: "column", justifyContent: "space-between"}}>
+                    <div>Суммарно оплата картой: {summaryByCostviser.summaryCard}</div>
+                    <div>Суммарно оплата наличными: {summaryByCostviser.summaryCash}</div>
+                    <div>Всего за период: {summaryByCostviser.total}</div>
+                    <div>Количество чеков за периода: {summaryByCostviser.chequesCount}</div>
+                  </div>
+                </div>
+                <div style={{flex: 1}}>
+                  <h3 style={{ marginTop: 0 }}>diff</h3>
+                  <div style={{display: "flex", flexDirection: "column", justifyContent: "space-between"}}>
+                    <div>{summaryByPlatformaOfd.summaryCard - summaryByCostviser.summaryCard === 0 ? "OK" : "Есть расхождение"}</div>
+                    <div>{summaryByPlatformaOfd.summaryCash - summaryByCostviser.summaryCash === 0 ? "OK" : "Есть расхождение"}</div>
+                    <div>{summaryByPlatformaOfd.total - summaryByCostviser.total === 0 ? "OK" : "Есть расхождение"}</div>
+                    <div>{summaryByPlatformaOfd.chequesCount - summaryByCostviser.chequesCount === 0 ? "OK" : "Есть расхождение"}</div>
+                  </div>
+                </div>
+              </div>
+            </section>
           </>
           :
               <section style={card}>
