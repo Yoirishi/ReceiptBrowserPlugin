@@ -20,8 +20,8 @@ function chequesEqual(a: UIRow, b: UIRow) {
     (a.amount === b.amount) &&
     (a.shift === b.shift) &&
     (a.sign === b.sign) &&
-    (a.paymentType === b.paymentType) &&
-    (a.sale === b.sale)
+    (a.paymentType === b.paymentType) /*&&
+    (a.sale === b.sale)*/
 }
 
 function diffCheques(
