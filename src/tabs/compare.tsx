@@ -17,7 +17,7 @@ type SummaryBySource = {
 function chequesEqual(a: UIRow, b: UIRow) {
   return (a.source !== b.source) &&
     (a.date === b.date) &&
-    (a.amount === b.amount) &&
+    parseFloat(a.amount) === parseFloat(b.amount) &&
     (a.shift === b.shift) &&
     (a.sign === b.sign) &&
     (a.paymentType === b.paymentType) /*&&
@@ -119,6 +119,17 @@ export default function ComparePage() {
 
     const { onlyLeft, onlyRight } = diffCheques(platformaCheques, costviserCheques)
 
+    // console.log(onlyLeft[0], onlyRight[0])
+    //
+    // const a = onlyLeft[0]
+    // const b = onlyRight[0]
+    //
+    // console.log(a.source !== b.source)
+    // console.log(a.date === b.date)
+    // console.log(parseFloat(a.amount) === parseFloat(b.amount))
+    // console.log(a.shift === b.shift)
+    // console.log(a.sign === b.sign)
+    // console.log(a.paymentType === b.paymentType)
 
 
     setSummaryByPlatformaOfd({
