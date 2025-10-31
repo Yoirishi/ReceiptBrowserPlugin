@@ -5,6 +5,7 @@ import React, { useEffect, useState, type CSSProperties } from "react"
 import { datasetsRepo } from "~src/lib/datasetsRepo";
 import { rowFromDatasetRow, type UIRow } from "~src/tabs/viewer";
 import useTabBoot from "~src/utils/useTabBoot";
+import { parseAmountRu } from "~src/utils/parseAmountRu"
 
 
 type SummaryBySource = {
@@ -17,7 +18,7 @@ type SummaryBySource = {
 function chequesEqual(a: UIRow, b: UIRow) {
   return (a.source !== b.source) &&
     (a.date === b.date) &&
-    parseFloat(a.amount) === parseFloat(b.amount) &&
+    parseAmountRu(a.amount) === parseAmountRu(b.amount) &&
     (a.shift === b.shift) &&
     (a.sign === b.sign) &&
     (a.paymentType === b.paymentType) /*&&
@@ -126,23 +127,23 @@ export default function ComparePage() {
     //
     // console.log(a.source !== b.source)
     // console.log(a.date === b.date)
-    // console.log(parseFloat(a.amount) === parseFloat(b.amount))
+    // console.log(parseAmountRu(a.amount) === parseAmountRu(b.amount))
     // console.log(a.shift === b.shift)
     // console.log(a.sign === b.sign)
     // console.log(a.paymentType === b.paymentType)
 
 
     setSummaryByPlatformaOfd({
-      summaryCard: platformaCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseFloat(row.amount), 0),
-      summaryCash: platformaCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseFloat(row.amount), 0),
-      total: platformaCheques.reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      summaryCard: platformaCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseAmountRu(row.amount), 0),
+      summaryCash: platformaCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseAmountRu(row.amount), 0),
+      total: platformaCheques.reduce((acc, row) => acc+parseAmountRu(row.amount), 0),
       chequesCount: platformaCheques.length
     })
 
     setSummaryByCostviser({
-      summaryCard: costviserCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseFloat(row.amount), 0),
-      summaryCash: costviserCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseFloat(row.amount), 0),
-      total: costviserCheques.reduce((acc, row) => acc+parseFloat(row.amount), 0),
+      summaryCard: costviserCheques.filter(r => r.paymentType === "Оплата картой").reduce((acc, row) => acc+parseAmountRu(row.amount), 0),
+      summaryCash: costviserCheques.filter(r => r.paymentType === "Наличными").reduce((acc, row) => acc+parseAmountRu(row.amount), 0),
+      total: costviserCheques.reduce((acc, row) => acc+parseAmountRu(row.amount), 0),
       chequesCount: costviserCheques.length
     })
 

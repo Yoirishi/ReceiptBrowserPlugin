@@ -50,7 +50,7 @@ const defaultFormatDate = (iso: string) => {
 const defaultSign = (t: string) => {
   switch (t) {
     case "sale": return "Приход"
-    case "return": return "Возврат прихода"
+    case "sale_return": return "Возврат прихода"
     case "buy": return "Расход"
     case "return_buy": return "Возврат расхода"
     default: return t
@@ -61,7 +61,7 @@ const defaultPaymentType = (s: string) => {
   switch (s) {
     case "electron": return "Оплата картой"
     case "cash": return "Наличными"
-    case "combined": return "Комбинированная оплата"
+    case "combined": return "Смешанный"
     case "cashback": return "Наличными"
     default: return s
   }
