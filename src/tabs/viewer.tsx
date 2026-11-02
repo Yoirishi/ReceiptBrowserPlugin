@@ -1,48 +1,9 @@
 // viewer.tsx
 import React, { type CSSProperties, useEffect, useState } from "react"
-import { datasetsRepo, type DatasetRow } from "~src/lib/datasetsRepo"
+import { datasetsRepo } from "~src/lib/datasetsRepo"
 import useTabBoot from "~src/utils/useTabBoot"
 
-// ---------------- types & helpers ----------------
-export type UIRow = {
-  id: string
-  date: string
-  deviceName: string
-  amount: string
-  sign: string
-  paymentType: string
-  fnsStatus: string
-  crptStatus: string
-  sale: string
-  shift: string
-  detailsUrl: string
-  ts: number
-  source?: string
-  batch?: string
-}
-
-const S = (v: unknown) => (v == null ? "" : String(v))
-
-export function rowFromDatasetRow(r: DatasetRow): UIRow {
-  const d = (r.data || {}) as Record<string, unknown>
-  return {
-    id: S(d.id || d.key || ""),
-    date: S(d.date),
-    deviceName: S(d.deviceName),
-    amount: S(d.amount),
-    sign: S(d.sign),
-    paymentType: S(d.paymentType),
-    fnsStatus: S(d.fnsStatus),
-    crptStatus: S(d.crptStatus),
-    sale: S(d.sale),
-    shift: S(d.shift),
-    detailsUrl: S(d.detailsUrl),
-    ts: r.ts || Date.now(),
-    source: r.source ? String(r.source) : "",
-    batch: r.batch ? String(r.batch) : ""
-  }
-}
-
+import { rowFromDatasetRow, type UIRow } from "~src/lib/receiptRows"
 
 export default function Viewer() {
   const { status, error, datasetId } = useTabBoot()

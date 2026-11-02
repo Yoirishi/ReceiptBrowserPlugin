@@ -205,6 +205,10 @@ export class DatasetsRepo {
     return this.db.datasetRows.where({ datasetId }).count()
   }
 
+  async listAllRows(datasetId: string): Promise<DatasetRow[]> {
+    return this.db.datasetRows.where({ datasetId }).toArray()
+  }
+
   async clearRows(datasetId: string) {
     await this.db.datasetRows.where({ datasetId }).delete()
     await this.db.datasets.update(datasetId, { updatedAt: Date.now() })

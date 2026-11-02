@@ -1,7 +1,7 @@
 {
   "name": "receipt-parser",
   "displayName": "Receipt parser",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A browser extension for analyzing payment receipts across multiple accounting systems and comparing the results.",
   "author": "yoirishi.zdv@gmail.com",
   "scripts": {
@@ -11,7 +11,8 @@
     "test": "node --test tests/*.test.cjs",
     "typecheck": "tsc --noEmit --incremental false",
     "test:browser": "node tests/browser-smoke.cjs",
-    "test:build": "node tests/verify-build.cjs"
+    "test:build": "node tests/verify-build.cjs",
+    "test:compare-browser": "node tests/compare-browser.cjs"
   },
   "dependencies": {
     "@plasmohq/messaging": "^0.7.2",
