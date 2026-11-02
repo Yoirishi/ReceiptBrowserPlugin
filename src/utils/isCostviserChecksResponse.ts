@@ -1,141 +1,83 @@
-// ===== Types =====
-
+// Validate only fields used by the mapper, not optional cashier/VAT metadata.
 export interface CostviserChecksResponse {
   items: CheckItem[]
 }
 
 export interface CheckItem {
-  actions: Actions
-  id: number
-  code: string
+  id: number | string
+  num?: number | string
   check_type: string
-  created_at: string // ISO
-  num: number
-  quantity: number
-  discount: number
-  total: number
-  error: string | null
-  comment: string | null
-  shift: number
-  fields: { KKT: KKT }
-  change: number
-  total_payments: number
+  created_at?: string
+  quantity?: number | string
+  total: number | string
+  shift: number | string
   payment_source: string
-  employee_ids: number[]
-  turn_id: number
-  cashbox_id: number
-  cashier_id: number
-  device_id: number
-  department_id: number
-  card_id: number | null
-  check_id: number | null
-  card: unknown | null
-  cashier: Cashier
-  vat_amount: number
+  device_id?: number | string
+  fields?: { KKT?: { date?: string; kkt_rn?: string } | null } | null
 }
 
-export interface Actions {
-  read: boolean
-  edit: boolean
-  destroy: boolean
-}
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+const isNumberLike = (value: unknown) =>
+  (typeof value === "number" && Number.isFinite(value)) ||
+  (typeof value === "string" &&
+    value.trim() !== "" &&
+    Number.isFinite(Number(value)))
 
-export interface Cashier {
-  id: number
-  name: string
-}
-
-export interface KKT {
-  fn: string
-  inn: string
-  num: number
-  sno: string
-  date: string // ISO
-  flag: string
-  total: number
-  kkt_rn: string
-  "Сумма НДС": string
-}
-
-// ===== Type guards =====
-
-export const isCostviserChecksResponse = (
-  v: unknown
-): v is CostviserChecksResponse =>
-  isObject(v) &&
-  Array.isArray((v as any).items) &&
-  (v as any).items.every(isCheckItem)
-
-export const isCheckItem = (v: unknown): v is CheckItem => {
-  if (!isObject(v)) return false
-  return (
-    isActions((v as any).actions) &&
-    isNumber((v as any).id) &&
-    isString((v as any).code) &&
-    isString((v as any).check_type) &&
-    isString((v as any).created_at) &&
-    isNumber((v as any).num) &&
-    isNumber((v as any).quantity) &&
-    isNumber((v as any).discount) &&
-    isNumber((v as any).total) &&
-    isNullableString((v as any).error) &&
-    isNullableString((v as any).comment) &&
-    isNumber((v as any).shift) &&
-    isObject((v as any).fields) &&
-    isKKT((v as any).fields?.KKT) &&
-    isNumber((v as any).change) &&
-    isNumber((v as any).total_payments) &&
-    isString((v as any).payment_source) &&
-    Array.isArray((v as any).employee_ids) &&
-    (v as any).employee_ids.every(isNumber) &&
-    isNumber((v as any).turn_id) &&
-    isNumber((v as any).cashbox_id) &&
-    isNumber((v as any).cashier_id) &&
-    isNumber((v as any).device_id) &&
-    isNumber((v as any).department_id) &&
-    isNullableNumber((v as any).card_id) &&
-    isNullableNumber((v as any).check_id) &&
-    (isObject((v as any).card) || (v as any).card === null) &&
-    isCashier((v as any).cashier) &&
-    isNumber((v as any).vat_amount)
+export function checkItemErrors(value: unknown): string[] {
+  if (!isObject(value)) return ["item: ожидался объект"]
+  const errors: string[] = []
+  if (
+    !(typeof value.id === "string" && value.id.trim()) &&
+    !isNumberLike(value.id)
   )
+    errors.push("id")
+  for (const field of ["total", "shift"] as const) {
+    if (!isNumberLike(value[field])) errors.push(field)
+  }
+  for (const field of ["check_type", "payment_source"] as const) {
+    if (typeof value[field] !== "string") errors.push(field)
+  }
+  if (value.fields != null && !isObject(value.fields)) errors.push("fields")
+  const fields = isObject(value.fields) ? value.fields : null
+  if (fields?.KKT != null && !isObject(fields.KKT)) errors.push("fields.KKT")
+  const kkt = isObject(fields?.KKT) ? fields.KKT : null
+  if (kkt?.date != null && typeof kkt.date !== "string")
+    errors.push("fields.KKT.date")
+  if (kkt?.kkt_rn != null && typeof kkt.kkt_rn !== "string")
+    errors.push("fields.KKT.kkt_rn")
+  if (typeof value.created_at !== "string" && typeof kkt?.date !== "string")
+    errors.push("created_at / fields.KKT.date")
+  return errors
 }
 
-export const isActions = (v: unknown): v is Actions =>
-  isObject(v) &&
-  typeof (v as any).read === "boolean" &&
-  typeof (v as any).edit === "boolean" &&
-  typeof (v as any).destroy === "boolean"
+export const isCheckItem = (value: unknown): value is CheckItem =>
+  checkItemErrors(value).length === 0
+export const isCostviserChecksResponse = (
+  value: unknown
+): value is CostviserChecksResponse =>
+  isObject(value) &&
+  Array.isArray(value.items) &&
+  value.items.every(isCheckItem)
 
-export const isCashier = (v: unknown): v is Cashier =>
-  isObject(v) &&
-  isNumber((v as any).id) &&
-  isString((v as any).name)
-
-export const isKKT = (v: unknown): v is KKT =>
-  isObject(v) &&
-  isString((v as any).fn) &&
-  isString((v as any).inn) &&
-  isNumber((v as any).num) &&
-  isString((v as any).sno) &&
-  isString((v as any).date) &&
-  isString((v as any).flag) &&
-  isNumber((v as any).total) &&
-  isString((v as any).kkt_rn) &&
-  isString((v as any)["Сумма НДС"])
-
-// ===== Small helpers =====
-
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === "object"
-
-const isNumber = (v: unknown): v is number =>
-  typeof v === "number" && Number.isFinite(v)
-
-const isString = (v: unknown): v is string => typeof v === "string"
-
-const isNullableString = (v: unknown): v is string | null =>
-  v === null || typeof v === "string"
-
-const isNullableNumber = (v: unknown): v is number | null =>
-  v === null || (typeof v === "number" && Number.isFinite(v))
+export function parseCostviserResponse(
+  payload: string
+): CostviserChecksResponse {
+  let value: unknown
+  try {
+    value = JSON.parse(payload)
+  } catch {
+    throw new Error("Ответ Trade не является JSON (возможна страница входа)")
+  }
+  if (!isObject(value) || !Array.isArray(value.items)) {
+    throw new Error("Изменился формат Trade: ожидался объект с массивом items")
+  }
+  for (let index = 0; index < value.items.length; index++) {
+    const errors = checkItemErrors(value.items[index])
+    if (errors.length)
+      throw new Error(
+        `Trade: items[${index}], некорректные поля: ${errors.join(", ")}`
+      )
+  }
+  return value as unknown as CostviserChecksResponse
+}

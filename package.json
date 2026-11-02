@@ -1,13 +1,17 @@
 {
   "name": "receipt-parser",
   "displayName": "Receipt parser",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A browser extension for analyzing payment receipts across multiple accounting systems and comparing the results.",
   "author": "yoirishi.zdv@gmail.com",
   "scripts": {
     "dev": "plasmo dev",
     "build": "plasmo build",
-    "package": "plasmo package"
+    "package": "plasmo package",
+    "test": "node --test tests/*.test.cjs",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:browser": "node tests/browser-smoke.cjs",
+    "test:build": "node tests/verify-build.cjs"
   },
   "dependencies": {
     "@plasmohq/messaging": "^0.7.2",
@@ -44,18 +48,7 @@
         "https://*/*",
         "http://*/*"
       ]
-    },
-    "web_accessible_resources": [
-      {
-        "resources": [
-          "**/*.wasm",
-          "**/*.worker.js"
-        ],
-        "matches": [
-          "<all_urls>"
-        ]
-      }
-    ]
+    }
   },
   "contributors": [
     {

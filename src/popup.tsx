@@ -1,18 +1,23 @@
 import React from "react";
 import ComboBox from "~src/components/ComboBox";
 import { datasetsRepo, type Dataset } from "~src/lib/datasetsRepo";
+import { receiptSource, type ParserReply, type ParserStatus } from "~src/lib/receiptProtocol"
 
 
 // domains where parsing is enabled (tune later)
 const SUPPORTED_HOSTS = [
   "platformaofd.ru",
-  "costviser.ru"
+  "costviser.ru",
+  "4ait.ru"
 ]
 
 export default function Popup() {
   const [list, setList] = React.useState<Dataset[]>([])
   const [active, setActive] = React.useState<Dataset | null>(null)
   const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState("")
+  const [parserStatus, setParserStatus] = React.useState<ParserStatus | null>(null)
+  const [copyMessage, setCopyMessage] = React.useState("")
   const [hostInfo, setHostInfo] = React.useState<{ host: string | null; supported: boolean; tabId: number | null }>({ host: null, supported: false, tabId: null })
 
   React.useEffect(() => {
@@ -35,11 +40,19 @@ export default function Popup() {
       let supported = false
       if (url) {
         try {
-          host = new URL(url).host
-          supported = SUPPORTED_HOSTS.some((h) => host === h || host.endsWith("." + h))
+          host = new URL(url).hostname
+          supported = receiptSource(url) !== null
         } catch {}
       }
       setHostInfo({ host, supported, tabId: tab?.id ?? null })
+      if (supported && tab?.id !== undefined) {
+        try {
+          const reply: ParserReply = await chrome.tabs.sendMessage(tab.id, { type: "PARSER_STATUS" })
+          setParserStatus(reply.status ?? null)
+        } catch {
+          setError("Нет связи со скриптом страницы. Обновите вкладку после установки или обновления расширения")
+        }
+      }
     } catch (e) {
       console.warn("detectHost error", e)
       setHostInfo({ host: null, supported: false, tabId: null })
@@ -56,31 +69,22 @@ export default function Popup() {
   const openViewer = () => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/viewer.html" + (active ? `?sid=${active.id}` : "")) })
   const openCompare = () => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/compare.html") }) // placeholder for future
 
-  const findPlatformaTab = async () => {
-    const tabs = await chrome.tabs.query({})
-    return tabs.find(t => typeof t.url === "string" && /^https:\/\/lk\.platformaofd\.ru\/web\/auth\/cheques\/search/.test(t.url))
-  }
-
   const startParse = async () => {
     setBusy(true)
-
+    setError("")
     try {
-      const tab = await findPlatformaTab()
-      if (!tab?.id) {
-        console.log("No active Platforma tab")
-        throw new Error("Нет активной вкладки")
-      }
-      console.log("start parse on tab", tab.id, "with selection", active?.id, "active?", active ? "yes" : "no")
-      // const res = await chrome.tabs.sendMessage(tab.id, {
-      //   type: "START_PARSE",
-      //   datasetId: active?.id
-      // })
-      const res = await chrome.runtime.sendMessage({
-        type: "START_PARSE",
+      if (hostInfo.tabId === null) throw new Error("Нет активной вкладки")
+      const res: ParserReply = await chrome.tabs.sendMessage(hostInfo.tabId, {
+        type: parserStatus?.running ? "STOP_PARSE" : "START_PARSE",
+        datasetId: active?.id
       })
-      if (!res?.ok) throw new Error("Контент-скрипт не ответил")
+      if (res.status) setParserStatus(res.status)
+      if (!res?.ok) throw new Error(res?.error || "Скрипт страницы не ответил")
     } catch (e) {
-      console.error("startParse error", e)
+      const message = e instanceof Error ? e.message : "Ошибка запуска"
+      setError(/receiving end|connection|context invalidated/i.test(message)
+        ? "Нет связи со скриптом страницы. Обновите вкладку и повторите запуск"
+        : message)
     } finally {
       setBusy(false)
     }
@@ -136,14 +140,30 @@ export default function Popup() {
           </div>
         </div>
         {hostInfo.supported ? (
-          <button style={{ ...btn, width: "100%" }} disabled={!active || busy} onClick={startParse}>
-            {busy ? "Parsing…" : active ? `Парсить в «${active.name}»` : "Выбери выборку"}
+          <button style={{ ...btn, width: "100%" }} disabled={(!active && !parserStatus?.running) || busy} onClick={startParse}>
+            {busy ? "Подключение…" : parserStatus?.running ? "Остановить сбор" : active ? `Парсить в «${active.name}»` : "Выбери выборку"}
           </button>
         ) : (
           <div style={{ fontSize: 12, color: "#6B7280" }}>
             Парсер выключен для этого домена. Доступные домены: {SUPPORTED_HOSTS.join(", ")}
           </div>
         )}
+        {error && <p role="alert" style={{ color: "#b91c1c", fontSize: 12 }}>{error}</p>}
+        {parserStatus && <div style={{ fontSize: 12, marginTop: 8 }}>
+          <div>Перехватчик: {parserStatus.interceptorReady ? "подключён" : "нет связи"}</div>
+          <div>Ответов API: {parserStatus.responses} · Сохранено: {parserStatus.saved}</div>
+          <p>{parserStatus.message}</p>
+          <button style={ghostBtn} onClick={async () => {
+            try {
+              const current: ParserReply = await chrome.tabs.sendMessage(hostInfo.tabId!, { type: "PARSER_STATUS" })
+              if (!current.ok || !current.status) throw new Error("Нет связи со страницей")
+              setParserStatus(current.status)
+              await navigator.clipboard.writeText(JSON.stringify(current.status, null, 2))
+              setCopyMessage("Журнал скопирован")
+            } catch { setCopyMessage("Не удалось скопировать журнал. Откройте диагностику на странице чеков") }
+          }}>Копировать журнал</button>
+          {copyMessage && <p>{copyMessage}</p>}
+        </div>}
       </div>
 
       {/* Future: quick compare entry */}

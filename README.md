@@ -1,33 +1,56 @@
-This is a [Plasmo extension](https://docs.plasmo.com/) project bootstrapped with [`plasmo init`](https://www.npmjs.com/package/plasmo).
+# Receipt Parser
 
-## Getting Started
+Расширение Chrome для сбора и сравнения чеков из Платформы ОФД и Trade (Costviser).
 
-First, run the development server:
+## Установка обновления
+
+1. Откройте `chrome://extensions` и включите режим разработчика.
+2. Для существующего распакованного расширения нажмите «Обновить»/кнопку перезагрузки. Подготовлены обе папки: `build/chrome-mv3-dev` и `build/chrome-mv3-prod`; используйте уже подключённую папку. Для новой установки нажмите «Загрузить распакованное расширение» и выберите `build/chrome-mv3-prod`.
+3. Проверьте версию **0.0.2**. Обновите вкладки Trade и ОФД: уже открытые страницы могут содержать скрипты предыдущей версии.
+4. В расширении выберите выборку. Откройте раздел «Чеки» в нужном кабинете и нажмите «Парсить» во всплывающем окне или «Начать сбор» на странице.
+5. Выполните поиск/переключайте страницы списка. Расширение собирает загружаемые страницы, автоматически весь период не обходит. Уже открытая HTML-таблица ОФД и последний ответ Trade также подхватываются при запуске.
+6. Нажмите «Остановить сбор» перед переходом к другой выборке. Выборка фиксируется на момент запуска. Счётчик показывает только подтверждённые записи за текущий сеанс. Повторные ответы с теми же id пропускаются в пределах сеанса; повторный запуск/перезагрузка страницы может добавить те же чеки снова.
+
+Для проверки сначала используйте отдельную тестовую выборку.
+
+## Поддерживаемые страницы
+
+- Trade: `https://tdom27.costviser.ru/#/checks` и другие поддомены `costviser.ru`; старые поддомены `4ait.ru` также поддерживаются.
+- ОФД: `https://lk.platformaofd.ru/web/auth/cheques/search`. Скрипты подключаются на всём домене кабинета, чтобы переход из другого раздела не требовал отдельной перезагрузки.
+- Перехватываются XHR/fetch. Для Trade распознаются пути `/checks`, `/checks.json`, в том числе с префиксом `/api/...`. Для ОФД — пути с сегментом `/cheques`.
+
+## Если чеки не собираются
+
+На странице чеков откройте «Диагностика» → «Копировать журнал». Та же кнопка есть во всплывающем окне расширения. Журнал хранит последние 100 событий текущей страницы и не сохраняется после её перезагрузки. Копируются версия, источник, id выборки, счётчики, время, адреса запросов без query/hash, HTTP-статусы, размеры ответов и сообщения ошибок. Тела ответов, строки чеков, cookies и заголовки авторизации в журнал не включаются. Адреса могут содержать название вашей организации или идентификаторы в пути: перед передачей журнала проверьте его содержимое.
+
+- **Нет связи со скриптом страницы:** перезагрузите расширение в `chrome://extensions`, затем вкладку кабинета. Проверьте, что Chrome разрешает расширению доступ к этому сайту.
+- **Перехватчик: нет связи:** журнал покажет ошибку регистрации/подключения перехватчика; проверьте разрешения и обновите вкладку.
+- **За 15 секунд нет ответа:** выполните поиск или перейдите на следующую страницу чеков. Журнал также содержит адреса прочих XHR/fetch без их тел: по ним можно определить новый адрес API.
+- **HTTP 401/403 или перенаправление на вход:** войдите в кабинет и проверьте права доступа к чекам.
+- **Изменился формат Trade:** в ошибке указан индекс `items[...]` и названия проблемных полей. Необязательные данные кассира/НДС/ККТ не должны блокировать сбор; при отсутствии ККТ дата берётся из `created_at`.
+- **Изменилась таблица ОФД:** журнал сообщает об отсутствии id, неверном числе колонок или нераспознанной дате/сумме.
+- **Ответ обрезан:** уменьшите число чеков на странице; предел ответа — 5 млн символов.
+- **Ошибка записи:** счётчик не увеличивается. Исправьте причину из журнала, затем повторно загрузите страницу списка чеков. Уже отправленная запись может завершиться после нажатия «Остановить».
+
+При ошибках фонового процесса откройте его консоль по ссылке «Service worker» в карточке расширения. Сообщения расширения начинаются с `[Receipt Parser]`.
+
+## Разработка и проверки
 
 ```bash
-pnpm dev
-# or
 npm run dev
-```
+# Загрузить build/chrome-mv3-dev в chrome://extensions.
 
-Open your browser and load the appropriate development build. For example, if you are developing for the chrome browser, using manifest v3, use: `build/chrome-mv3-dev`.
-
-You can start editing the popup by modifying `popup.tsx`. It should auto-update as you make changes. To add an options page, simply add a `options.tsx` file to the root of the project, with a react component default exported. Likewise to add a content page, add a `content.ts` file to the root of the project, importing some module and do some logic, then reload the extension on your browser.
-
-For further guidance, [visit our Documentation](https://docs.plasmo.com/)
-
-## Making production build
-
-Run the following:
-
-```bash
-pnpm build
-# or
+npm run typecheck
+npm test
 npm run build
+# Готовая папка: build/chrome-mv3-prod.
+npm run test:build
+
+npm run build -- --tag=dev --env=.env.development
+# Одноразовая сборка в существующую папку build/chrome-mv3-dev.
+
+npm run test:browser
+# Открыть http://127.0.0.1:43127/#/checks.
 ```
 
-This should create a production bundle for your extension, ready to be zipped and published to the stores.
-
-## Submit to the webstores
-
-The easiest way to deploy your Plasmo extension is to use the built-in [bpp](https://bpp.browser.market) GitHub action. Prior to using this action however, make sure to build your extension and upload the first version to the store to establish the basic credentials. Then, simply follow [this setup instruction](https://docs.plasmo.com/framework/workflows/submit) and you should be on your way for automated submission!
+Локальный браузерный стенд использует настоящие DOMParser, React, XHR и fetch с искусственными чеками и заглушкой хранилища расширения. Он проверяет HTML ОФД, ранний ответ Trade, повторный ответ, HTTP 401, изменение схемы и отказ записи. Автотесты Node проверяют сетевые перехватчики и подтверждения фоновой записи. Эти проверки не заменяют проверку реальных ответов в авторизованных кабинетах.

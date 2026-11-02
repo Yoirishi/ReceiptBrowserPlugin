@@ -52,6 +52,8 @@ export interface NetEvent {
   method: string;
   /** Итоговый URL (после редиректов для XHR/fetch), если доступен. */
   url: string | undefined;
+  requestUrl?: string;
+  replayed?: boolean;
   /**
    * HTTP-статус. Для `fetch` c `opaque` может быть `0`.
    * Для jQuery указано из `xhr.status`, если доступен.
@@ -66,6 +68,8 @@ export interface NetEvent {
   body: string | null;
   /** Заголовок Content-Type (как вернул сервер), либо `null`. */
   contentType?: string | null;
+  truncated?: boolean;
+  readError?: boolean;
 }
 
 /**
@@ -117,6 +121,9 @@ export interface CreateNetInterceptorOptions {
    * Ничего не возвращает, исключения глотаются внутри перехватчика.
    */
   onEvent: (e: NetEvent) => void;
+  /** Filter URLs before reading or cloning response bodies. */
+  shouldCapture?: (url: string | undefined) => boolean;
+  onIgnoredResponse?: (event: NetEvent) => void;
 
   /**
    * Какие Content-Type читать и передавать в `onEvent`.
@@ -175,6 +182,8 @@ export interface CreateNetInterceptorOptions {
 export function createNetInterceptor(opts: CreateNetInterceptorOptions): () => void {
   const {
     onEvent,
+    shouldCapture = () => true,
+    onIgnoredResponse,
     contentTypes = ['any'],
     extraContentType = [],
     maxBodyChars = 100_000,
@@ -211,28 +220,41 @@ export function createNetInterceptor(opts: CreateNetInterceptorOptions): () => v
             const ms = +(performance.now() - start).toFixed(1);
             const ct = safeGetCt(this);
             const url = this.responseURL || (this as any).__ext?.url;
+            const requestUrl = (this as any).__ext?.url;
+            if (!shouldCapture(url) && !shouldCapture(requestUrl)) {
+              onIgnoredResponse?.({ kind: 'xhr', method: (this as any).__ext?.method || 'GET', url, status: this.status, timeMs: ms, body: null, contentType: ct });
+              return;
+            }
             let bodyText: string | null = null;
+            let truncated = false;
 
             // тело читаем только для текстовых/разрешённых типов
             if ((this.responseType === '' || this.responseType === 'text') && allowCT(ct)) {
               bodyText = String(this.responseText);
-              if (bodyText.length > maxBodyChars) bodyText = bodyText.slice(0, maxBodyChars);
+              truncated = bodyText.length > maxBodyChars;
+              if (truncated) bodyText = bodyText.slice(0, maxBodyChars);
+            } else if (this.responseType === 'json' && allowCT(ct)) {
+              bodyText = JSON.stringify(this.response);
+              truncated = bodyText.length > maxBodyChars;
+              if (truncated) bodyText = bodyText.slice(0, maxBodyChars);
             }
 
             onEvent({
               kind: 'xhr',
               method: (this as any).__ext?.method || 'GET',
               url,
+              requestUrl,
               status: this.status,
               timeMs: ms,
               body: bodyText,
               contentType: ct,
+              truncated,
             });
           } catch { /* noop */ }
           this.removeEventListener('loadend', onEnd);
         };
 
-        this.addEventListener('loadend', onEnd);
+        this.addEventListener('loadend', onEnd, { once: true });
         return nativeSend.apply(this, arguments as any);
       };
 
@@ -257,30 +279,51 @@ export function createNetInterceptor(opts: CreateNetInterceptorOptions): () => v
       (globalThis as any).fetch = function (...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
         const t0 = performance.now();
         const [input, init] = args;
-        const method = (init && (init as RequestInit).method) || 'GET';
-        const url = typeof input === 'string' ? input : (input as Request)?.url;
+        const method = init?.method || (typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET');
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url;
 
-        return nativeFetch(...args).then(async (res) => {
+        return nativeFetch(...args).then((res) => {
+          if (!shouldCapture(res.url || url) && !shouldCapture(url)) {
+            try { onIgnoredResponse?.({ kind: 'fetch', method, url: res.url || url, status: res.status, timeMs: +(performance.now() - t0).toFixed(1), body: null }); } catch {}
+            return res;
+          }
+          // Start reading a clone synchronously, then return the original response
+          // immediately. A slow/streaming body must never block the website.
           try {
+            const captured = res.clone();
+            void (async () => { try {
             const ms = +(performance.now() - t0).toFixed(1);
             const ct = res.headers.get('content-type');
             let bodyText: string | null = null;
 
             if (!(skipOpaque && res.type === 'opaque') && allowCT(ct)) {
-              bodyText = await readResponseLimited(res, maxBodyChars);
+              bodyText = await readResponseLimited(captured, maxBodyChars + 1);
             }
 
             onEvent({
               kind: 'fetch',
               method,
               url: res.url || url,
+              requestUrl: url,
               status: res.status,
               timeMs: ms,
-              body: bodyText,
+              body: bodyText?.slice(0, maxBodyChars) ?? null,
               contentType: ct,
+              truncated: bodyText !== null && bodyText.length > maxBodyChars,
+              readError: bodyText === null,
             });
-          } catch { /* noop */ }
+          } catch {
+            onEvent({ kind: 'fetch', method, url: res.url || url, status: res.status, timeMs: null, body: null, readError: true });
+            } })().catch(() => {});
+          } catch {
+            try { onEvent({ kind: 'fetch', method, url: res.url || url, requestUrl: url, status: res.status, timeMs: null, body: null, readError: true }); } catch {}
+          }
           return res;
+        }, (error) => {
+          if (shouldCapture(url)) {
+            try { onEvent({ kind: 'fetch', method, url, status: 0, timeMs: null, body: null }); } catch {}
+          }
+          throw error;
         });
       };
 
@@ -299,6 +342,7 @@ export function createNetInterceptor(opts: CreateNetInterceptorOptions): () => v
       const $: any = (globalThis as any).jQuery;
       const handler = (_e: any, xhr: XMLHttpRequest, options: any) => {
         try {
+          if (!shouldCapture(xhr.responseURL || options?.url)) return;
           const ct = safeGetCt(xhr);
           let bodyText: string | null = null;
           if ((xhr.responseType === '' || xhr.responseType === 'text') && allowCT(ct)) {
@@ -390,13 +434,13 @@ function safeGetCt(xhr: XMLHttpRequest): string | null {
  * Предпочитает потоковое чтение через `ReadableStreamDefaultReader`, чтобы
  * не держать в памяти весь ответ. Если stream недоступен — читает `text()`.
  *
- * @param res   Исходный Response (клонируется внутри).
+ * @param res   Клон Response, принадлежащий перехватчику.
  * @param maxChars Лимит символов. Если достигнут — чтение останавливается.
  * @returns Строка тела (возможно усечённая) или `null`, если прочитать не удалось.
  */
 async function readResponseLimited(res: Response, maxChars: number): Promise<string | null> {
   try {
-    const clone = res.clone();
+    const clone = res;
     if (clone.body && 'getReader' in clone.body) {
       const reader = clone.body.getReader();
       const decoder = new TextDecoder();
@@ -407,7 +451,7 @@ async function readResponseLimited(res: Response, maxChars: number): Promise<str
         acc += decoder.decode(value, { stream: true });
         if (acc.length >= maxChars) {
           acc = acc.slice(0, maxChars);
-          try { reader.cancel(); } catch {}
+          void reader.cancel().catch(() => {});
           break;
         }
       }

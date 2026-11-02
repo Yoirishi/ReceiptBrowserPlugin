@@ -31,7 +31,7 @@ type MapperOptions = {
   mapSale?: (item: CheckItem) => string
 }
 
-const defaultBuildRowId = (i: CheckItem) => `terminal_cheque_${i.num}_id`
+const defaultBuildRowId = (i: CheckItem) => String(i.id)
 
 const defaultFormatAmount = (n: number) =>
   `${n.toLocaleString("ru-RU")} ₽`
@@ -67,8 +67,8 @@ const defaultPaymentType = (s: string) => {
   }
 }
 
-const defaultDeviceName = (i: CheckItem) => i.fields?.KKT?.kkt_rn ?? String(i.device_id)
-const defaultSale = (i: CheckItem) => String(i.quantity)
+const defaultDeviceName = (i: CheckItem) => i.fields?.KKT?.kkt_rn ?? String(i.device_id ?? "")
+const defaultSale = (i: CheckItem) => String(i.quantity ?? "")
 
 
 export function mapCostviserToCheques(
@@ -88,18 +88,17 @@ export function mapCostviserToCheques(
     mapSale = defaultSale
   } = opts
 
-  // @ts-ignore
   return resp.items.map((it) => ({
     id: buildRowId(it),
     detailsUrl: buildDetailsUrl(it),
     fnsStatus: getFnsStatus(it),
     paymentType: mapPaymentType(it.payment_source),
     sign: mapSign(it.check_type),
-    date: formatDate(it.fields.KKT.date),
+    date: formatDate(it.fields?.KKT?.date || it.created_at || ""),
     deviceName: getDeviceName(it),
     sale: mapSale(it),
     shift: String(it.shift),
-    amount: formatAmount(it.total),
+    amount: formatAmount(Number(it.total)),
     crptStatus: getCrptStatus(it)
   }))
 }

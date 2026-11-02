@@ -187,8 +187,10 @@ export class DatasetsRepo {
       return { datasetId, key, data, ts: nowTs, batch, source }
     })
 
-    await this.db.datasetRows.bulkAdd(mapped)
-    await this.db.datasets.update(datasetId, { updatedAt: Date.now() })
+    await this.db.transaction("rw", this.db.datasetRows, this.db.datasets, async () => {
+      await this.db.datasetRows.bulkAdd(mapped)
+      await this.db.datasets.update(datasetId, { updatedAt: Date.now() })
+    })
   }
 
   async listRows(datasetId: string, limit = 200, offset = 0): Promise<DatasetRow[]> {
